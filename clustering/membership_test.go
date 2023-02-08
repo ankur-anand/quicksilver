@@ -1,39 +1,72 @@
-package clustering_test
+package clustering
 
 import (
-	"github.com/ankur-anand/quicksilver/clustering"
-	"github.com/hashicorp/serf/serf"
 	"go.uber.org/zap/zaptest"
 	"net"
 	"strconv"
 	"testing"
+	"time"
 )
+
+type mockedEventNotifier struct {
+	counter chan int
+	eventer chan int
+}
+
+func (m mockedEventNotifier) OnChangeEvent(event MemberEvent, information MemberInformation) {
+	m.counter <- 1
+}
+
+func (m mockedEventNotifier) OnEvent(eventName string, payload []byte) {
+	m.eventer <- 1
+}
+
+func newMockedEN() mockedEventNotifier {
+	return mockedEventNotifier{eventer: make(chan int, 10), counter: make(chan int, 10)}
+}
 
 func TestSetupSerf(t *testing.T) {
 	mc1 := _setupMemberConfig(t)
 	l := zaptest.NewLogger(t)
-	ec1 := make(chan serf.Event, 10)
-	serf1, err := clustering.NewMembership(ec1, mc1, l)
+	shutdownCh := make(chan struct{})
+
+	mcen1 := newMockedEN()
+	en1 := newInMemoryStore(mcen1)
+
+	serf1, err := newMembership(mc1, l, en1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	go eventHandler(serf1.Serf, ec1)
+
+	go func() {
+		err := serf1.eventHandler(shutdownCh)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	mc2 := _setupMemberConfig(t)
 	p := strconv.FormatInt(int64(mc1.AdvertisePort), 10)
 	addr := net.JoinHostPort("127.0.0.1", p)
 
-	ec2 := make(chan serf.Event, 5)
-	serf2, err := clustering.NewMembership(ec2, mc2, l)
+	mcen2 := newMockedEN()
+	en2 := newInMemoryStore(mcen2)
+	serf2, err := newMembership(mc2, l, en2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	go eventHandler(serf2.Serf, ec2)
+	go func() {
+		err := serf2.eventHandler(shutdownCh)
+		if err != nil {
+			panic(err)
+		}
+	}()
 	_, err = serf2.Join([]string{addr}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = serf2.UserEvent("raft-add", []byte("new raft member added"), false)
+	err = serf2.sendEvent("raft-add", []byte("new raft member added"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,9 +78,24 @@ func TestSetupSerf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	validateEvents := func(count chan int, want int) {
+		select {
+		case <-time.After(5 * time.Second):
+			t.Errorf("errored while waiting for chan value.")
+		case c := <-count:
+			if c != want {
+				t.Errorf("expected channel value didn't matched want %d got %d", want, c)
+			}
+		}
+	}
+
+	for _, ch := range []chan int{mcen1.counter, mcen2.counter, mcen1.eventer, mcen2.eventer} {
+		validateEvents(ch, 1)
+	}
 }
 
-func _setupMemberConfig(t *testing.T) clustering.MembershipConfiguration {
+func _setupMemberConfig(t *testing.T) MembershipConfiguration {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -60,43 +108,14 @@ func _setupMemberConfig(t *testing.T) clustering.MembershipConfiguration {
 	p := strconv.FormatInt(int64(port), 10)
 	addr := net.JoinHostPort("127.0.0.1", p)
 	tmpDir := t.TempDir()
-	mc := clustering.MembershipConfiguration{
+	mc := MembershipConfiguration{
 		NodeName:      addr,
 		AdvertiseAddr: "127.0.0.1",
 		AdvertisePort: port,
 		SnapshotPath:  tmpDir,
 		Tags: map[string]string{
-			"quicksilver-raft-addr":        net.JoinHostPort("127.0.0.1", "8080"),
-			"quicksilver-raft-is_suffrage": "true",
+			"quicksilver-test-addr": net.JoinHostPort("127.0.0.1", "8080"),
 		},
 	}
 	return mc
-}
-
-func eventHandler(serfIns *serf.Serf, events chan serf.Event) error {
-	for e := range events {
-		switch e.EventType() {
-		case serf.EventMemberJoin:
-			for _, member := range e.(serf.MemberEvent).Members {
-				if isLocal(serfIns, member) {
-					continue
-				}
-			}
-		case serf.EventMemberLeave, serf.EventMemberFailed, serf.EventMemberReap:
-			for _, member := range e.(serf.MemberEvent).Members {
-				if isLocal(serfIns, member) {
-					continue
-				}
-			}
-		case serf.EventUser:
-			event := e.(serf.UserEvent)
-			clonePayload := make([]byte, len(event.Payload))
-			copy(clonePayload, event.Payload)
-		}
-	}
-	return nil
-}
-
-func isLocal(serfIns *serf.Serf, member serf.Member) bool {
-	return serfIns.LocalMember().Name == member.Name
 }

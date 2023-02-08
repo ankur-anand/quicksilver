@@ -49,16 +49,6 @@ func ensurePath(path string, dir bool) error {
 	return os.MkdirAll(path, 0755)
 }
 
-// MembershipConfiguration Configuration stores gossip configuration object for current node.
-type MembershipConfiguration struct {
-	NodeName      string // should be unique.
-	Tags          map[string]string
-	AdvertiseAddr string
-	AdvertisePort int
-	SnapshotPath  string
-	MinLogLevel   LogLevel
-}
-
 // DefaultConfig returns a quicksilver-flavored Serf default configuration,
 // suitable as a basis for a LAN, WAN, segment, or area.
 func defaultConfig() *serf.Config {
@@ -80,24 +70,83 @@ func defaultConfig() *serf.Config {
 	return base
 }
 
-// Membership provides the gossip membership inside the cluster.
+// membership provides the gossip membership inside the cluster.
 // It help's discover the nodes and it's metadata dynamically and quickly inside the cluster.
-type Membership struct {
+type membership struct {
 	*serf.Serf
+	eventsCh chan serf.Event
+	en       EventNotifier
 }
 
-// NewMembership is used to setup and initialize a gossip Membership
-func NewMembership(eventsCh chan serf.Event, c MembershipConfiguration, logger *zap.Logger) (Membership, error) {
+// SendEvent generates the provided named event inside the cluster with the provided payload.
+// IMP: Payload size is limited: inMemoryStore gossips via UDP, so the payload must fit within a single UDP packet.
+func (m *membership) sendEvent(name string, payload []byte) error {
+	return m.Serf.UserEvent(name, payload, false)
+}
+
+func (m *membership) Close() {
+
+}
+
+// EventHandler handles events operation for membership cluster.
+func (m *membership) eventHandler(shutdownCh <-chan struct{}) error {
+	for {
+		select {
+		case <-shutdownCh:
+			return nil
+		case event := <-m.eventsCh:
+			switch event.EventType() {
+			case serf.EventMemberJoin:
+				for _, member := range event.(serf.MemberEvent).Members {
+					if m.isLocal(member) {
+						continue
+					}
+					mi := MemberInformation{
+						NodeName: member.Name,
+						Tags:     member.Tags,
+					}
+					m.en.OnChangeEvent(MemberEventJoin, mi)
+				}
+			case serf.EventMemberLeave, serf.EventMemberFailed, serf.EventMemberReap:
+				for _, member := range event.(serf.MemberEvent).Members {
+					if m.isLocal(member) {
+						continue
+					}
+					mi := MemberInformation{
+						NodeName: member.Name,
+						Tags:     member.Tags,
+					}
+					m.en.OnChangeEvent(MemberEventLeave, mi)
+				}
+			case serf.EventUser:
+				ue := event.(serf.UserEvent)
+				m.en.OnEvent(ue.Name, ue.Payload)
+
+			}
+		}
+	}
+}
+
+func (m *membership) isLocal(member serf.Member) bool {
+	return m.Serf.LocalMember().Name == member.Name
+}
+
+// newMembership is used to setup and initialize a gossip membership
+func newMembership(c MembershipConfiguration, logger *zap.Logger, en EventNotifier) (membership, error) {
+	// serfEventChSize is the size of the buffered channel to get Serf
+	// events. If this is exhausted we will block Serf and Memberlist.
+	serfEventChSize := 2048
+	serfEventsCh := make(chan serf.Event, serfEventChSize)
 	conf := defaultConfig()
 	conf.Init()
 	conf.NodeName = c.NodeName
 	conf.SnapshotPath = filepath.Join(c.SnapshotPath, serfSnapshot)
 	if err := ensurePath(conf.SnapshotPath, false); err != nil {
-		return Membership{}, err
+		return membership{}, err
 	}
 
 	conf.Tags = c.Tags
-	conf.EventCh = eventsCh
+	conf.EventCh = serfEventsCh
 	// TODO: Support Key Encryption for serf events.
 
 	// This is the best effort to convert the standard log,
@@ -119,7 +168,7 @@ func NewMembership(eventsCh chan serf.Event, c MembershipConfiguration, logger *
 	conf.MemberlistConfig.BindPort = c.AdvertisePort
 	conf.Logger = stdLog
 	s, err := serf.Create(conf)
-	return Membership{Serf: s}, err
+	return membership{Serf: s, eventsCh: serfEventsCh, en: en}, err
 }
 
 type lwr struct {
