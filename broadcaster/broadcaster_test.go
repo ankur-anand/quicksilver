@@ -3,7 +3,7 @@ package broadcaster_test
 import (
 	"context"
 	"github.com/ankur-anand/quicksilver/broadcaster"
-	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilver"
+	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 	"reflect"
 	"testing"
 	"time"
@@ -34,7 +34,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		},
 	}
 
-	outStreams := make(map[string]<-chan []*quicksilver.TransactionLogs)
+	outStreams := make(map[string]<-chan []*quicksilverpb.TransactionLogs)
 	for _, c := range clients {
 		stream, err := bc.NewClientSubscriptionStream(c.name, c.database)
 		if err != nil {
@@ -44,11 +44,11 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 	}
 
 	// publish message.
-	pubMessages := make(map[string][]*quicksilver.TransactionLogs)
-	heartBeatMSG := &quicksilver.TransactionLogs{
+	pubMessages := make(map[string][]*quicksilverpb.TransactionLogs)
+	heartBeatMSG := &quicksilverpb.TransactionLogs{
 		SequenceNumber:     0,
 		LastSequenceNumber: 0,
-		Action:             quicksilver.TransactionLogs_HEARTBEAT,
+		Action:             quicksilverpb.TransactionLogs_HEARTBEAT,
 		Database:           "",
 		Kv:                 nil,
 		XxHash64_Checksum:  0,
@@ -58,11 +58,11 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		Trace:              nil,
 	}
 
-	pubMessages["database1"] = []*quicksilver.TransactionLogs{
+	pubMessages["database1"] = []*quicksilverpb.TransactionLogs{
 		{
 			SequenceNumber:     1,
 			LastSequenceNumber: 0,
-			Action:             quicksilver.TransactionLogs_SET,
+			Action:             quicksilverpb.TransactionLogs_SET,
 			Database:           "database1",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -73,11 +73,11 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		},
 	}
 
-	pubMessages["database2"] = []*quicksilver.TransactionLogs{
+	pubMessages["database2"] = []*quicksilverpb.TransactionLogs{
 		{
 			SequenceNumber:     2,
 			LastSequenceNumber: 1,
-			Action:             quicksilver.TransactionLogs_DELETE,
+			Action:             quicksilverpb.TransactionLogs_DELETE,
 			Database:           "database2",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -88,11 +88,11 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		},
 	}
 
-	pubMessages["database3"] = []*quicksilver.TransactionLogs{
+	pubMessages["database3"] = []*quicksilverpb.TransactionLogs{
 		{
 			SequenceNumber:     3,
 			LastSequenceNumber: 2,
-			Action:             quicksilver.TransactionLogs_SET,
+			Action:             quicksilverpb.TransactionLogs_SET,
 			Database:           "database3",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -104,7 +104,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		{
 			SequenceNumber:     4,
 			LastSequenceNumber: 3,
-			Action:             quicksilver.TransactionLogs_DELETE,
+			Action:             quicksilverpb.TransactionLogs_DELETE,
 			Database:           "database3",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -116,7 +116,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		{
 			SequenceNumber:     5,
 			LastSequenceNumber: 4,
-			Action:             quicksilver.TransactionLogs_DELETE,
+			Action:             quicksilverpb.TransactionLogs_DELETE,
 			Database:           "database3",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -126,11 +126,11 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 			Trace:              nil,
 		},
 	}
-	pubMessages["unknown"] = []*quicksilver.TransactionLogs{
+	pubMessages["unknown"] = []*quicksilverpb.TransactionLogs{
 		{
 			SequenceNumber:     0,
 			LastSequenceNumber: 0,
-			Action:             quicksilver.TransactionLogs_DELETE,
+			Action:             quicksilverpb.TransactionLogs_DELETE,
 			Database:           "",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -149,7 +149,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 	// _ = heartBeatMSG
 	bc.Broadcast(heartBeatMSG)
 
-	recvMessages := make(map[string][]*quicksilver.TransactionLogs)
+	recvMessages := make(map[string][]*quicksilverpb.TransactionLogs)
 	hbCounter := make(map[string]int)
 	for c, s := range outStreams {
 		select {
@@ -157,7 +157,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		case logs := <-s:
 			for _, l := range logs {
 				// if it's an heartbeat msg
-				if l.Action == quicksilver.TransactionLogs_HEARTBEAT {
+				if l.Action == quicksilverpb.TransactionLogs_HEARTBEAT {
 					hbCounter[c]++
 					continue
 				}
@@ -165,7 +165,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 				if ok {
 					recvMessages[l.Database] = append(recvMessages[l.Database], l)
 				} else {
-					recvMessages[l.Database] = make([]*quicksilver.TransactionLogs, 0)
+					recvMessages[l.Database] = make([]*quicksilverpb.TransactionLogs, 0)
 					recvMessages[l.Database] = append(recvMessages[l.Database], l)
 				}
 			}
@@ -212,12 +212,12 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 	}
 
 	// publish message.
-	pubMessages := make(map[string][]*quicksilver.TransactionLogs)
-	pubMessages["database1"] = []*quicksilver.TransactionLogs{
+	pubMessages := make(map[string][]*quicksilverpb.TransactionLogs)
+	pubMessages["database1"] = []*quicksilverpb.TransactionLogs{
 		{
 			SequenceNumber:     1,
 			LastSequenceNumber: 0,
-			Action:             quicksilver.TransactionLogs_SET,
+			Action:             quicksilverpb.TransactionLogs_SET,
 			Database:           "database1",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -228,11 +228,11 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 		},
 	}
 
-	pubMessages["database2"] = []*quicksilver.TransactionLogs{
+	pubMessages["database2"] = []*quicksilverpb.TransactionLogs{
 		{
 			SequenceNumber:     2,
 			LastSequenceNumber: 1,
-			Action:             quicksilver.TransactionLogs_DELETE,
+			Action:             quicksilverpb.TransactionLogs_DELETE,
 			Database:           "database2",
 			Kv:                 nil,
 			XxHash64_Checksum:  0,
@@ -243,7 +243,7 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 		},
 	}
 
-	outStreams := make(map[string]<-chan []*quicksilver.TransactionLogs)
+	outStreams := make(map[string]<-chan []*quicksilverpb.TransactionLogs)
 	for _, c := range clients {
 		stream, err := bc.NewClientSubscriptionStream(c.name, c.database)
 		if err != nil {
@@ -285,7 +285,7 @@ func TestBroadcastToSubscriber_Close(t *testing.T) {
 			database: "database2",
 		},
 	}
-	outStreams := make(map[string]<-chan []*quicksilver.TransactionLogs)
+	outStreams := make(map[string]<-chan []*quicksilverpb.TransactionLogs)
 	for _, c := range clients {
 		stream, err := bc.NewClientSubscriptionStream(c.name, c.database)
 		if err != nil {

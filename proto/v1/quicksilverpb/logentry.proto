@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package v1.quicksilver;
-option go_package = "github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilver";
+option go_package = "github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb";
 
 // TransactionLogs is the persistent log entries in the database.
 message TransactionLogs {

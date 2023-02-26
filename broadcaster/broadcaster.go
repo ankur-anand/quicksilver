@@ -3,7 +3,7 @@ package broadcaster
 import (
 	"context"
 	"fmt"
-	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilver"
+	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 	"strings"
 	"sync"
 )
@@ -32,7 +32,7 @@ func NewBroadcaster(ctx context.Context) *BroadcastToSubscriber {
 }
 
 // Broadcast publishes the log to all the streams currently registered for the database log.
-func (b *BroadcastToSubscriber) Broadcast(log *quicksilver.TransactionLogs) {
+func (b *BroadcastToSubscriber) Broadcast(log *quicksilverpb.TransactionLogs) {
 	b.mu.RLock()
 	if len(b.streams) == 0 {
 		b.mu.RUnlock()
@@ -41,7 +41,7 @@ func (b *BroadcastToSubscriber) Broadcast(log *quicksilver.TransactionLogs) {
 
 	for _, st := range b.streams {
 		// send heartbeat to all the streams.
-		if log.Action == quicksilver.TransactionLogs_HEARTBEAT {
+		if log.Action == quicksilverpb.TransactionLogs_HEARTBEAT {
 			st.rb.inBuf <- log
 			continue
 		}
@@ -79,7 +79,7 @@ func (b *BroadcastToSubscriber) EvictClient(client string) {
 }
 
 // NewClientSubscriptionStream returns a new initialized clientStream for the client, where TransactionLogs will be sent.
-func (b *BroadcastToSubscriber) NewClientSubscriptionStream(client string, db string) (<-chan []*quicksilver.TransactionLogs, error) {
+func (b *BroadcastToSubscriber) NewClientSubscriptionStream(client string, db string) (<-chan []*quicksilverpb.TransactionLogs, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {

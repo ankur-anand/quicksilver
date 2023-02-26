@@ -2,7 +2,7 @@ package broadcaster
 
 import (
 	"context"
-	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilver"
+	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 	"time"
 )
 
@@ -14,14 +14,14 @@ const (
 // ringBuffer receives transaction log in inBuf and send it to outBuf either when the bufferLimit has been reached
 // or batchTimeout is attained. This helps in maintaining the ordering while streaming the log's.
 type ringBuffer struct {
-	inBuf  chan *quicksilver.TransactionLogs
-	outBuf chan []*quicksilver.TransactionLogs
+	inBuf  chan *quicksilverpb.TransactionLogs
+	outBuf chan []*quicksilverpb.TransactionLogs
 }
 
 func newRingBuffer() *ringBuffer {
 	return &ringBuffer{
-		inBuf:  make(chan *quicksilver.TransactionLogs, bufferLimit),
-		outBuf: make(chan []*quicksilver.TransactionLogs, bufferLimit),
+		inBuf:  make(chan *quicksilverpb.TransactionLogs, bufferLimit),
+		outBuf: make(chan []*quicksilverpb.TransactionLogs, bufferLimit),
 	}
 }
 
@@ -31,7 +31,7 @@ func (r *ringBuffer) close() {
 }
 
 func (r *ringBuffer) observeStream(ctx context.Context) {
-	logCache := make([]*quicksilver.TransactionLogs, 0, bufferLimit)
+	logCache := make([]*quicksilverpb.TransactionLogs, 0, bufferLimit)
 	tick := time.NewTimer(batchTimeout)
 	for {
 		select {
