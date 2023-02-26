@@ -46,96 +46,82 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 	// publish message.
 	pubMessages := make(map[string][]*quicksilverpb.TransactionLogs)
 	heartBeatMSG := &quicksilverpb.TransactionLogs{
-		SequenceNumber:     0,
-		LastSequenceNumber: 0,
-		Action:             quicksilverpb.TransactionLogs_HEARTBEAT,
-		Database:           "",
-		Kv:                 nil,
-		XxHash64_Checksum:  0,
-		LastId:             0,
-		UnixTimestamp:      time.Now().UnixNano(),
-		AppliedToDb:        false,
-		Trace:              nil,
+		LogKind:              quicksilverpb.TransactionLogs_HEARTBEAT,
+		CreatedUnixTimestamp: time.Now().UnixNano(),
+		AppliedToDb:          false,
 	}
 
 	pubMessages["database1"] = []*quicksilverpb.TransactionLogs{
 		{
-			SequenceNumber:     1,
-			LastSequenceNumber: 0,
-			Action:             quicksilverpb.TransactionLogs_SET,
-			Database:           "database1",
-			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      1,
-			AppliedToDb:        false,
-			Trace:              nil,
+			LogKind:              quicksilverpb.TransactionLogs_OPERATIONAL,
+			SequenceNumber:       1,
+			LastSequenceNumber:   0,
+			Operation:            quicksilverpb.TransactionLogs_SET,
+			Database:             "database1",
+			Kv:                   nil,
+			CreatedUnixTimestamp: 1,
+			AppliedToDb:          false,
+			Trace:                nil,
 		},
 	}
 
 	pubMessages["database2"] = []*quicksilverpb.TransactionLogs{
 		{
-			SequenceNumber:     2,
-			LastSequenceNumber: 1,
-			Action:             quicksilverpb.TransactionLogs_DELETE,
-			Database:           "database2",
-			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      2,
-			AppliedToDb:        false,
-			Trace:              nil,
+			LogKind:              quicksilverpb.TransactionLogs_OPERATIONAL,
+			SequenceNumber:       2,
+			LastSequenceNumber:   1,
+			Operation:            quicksilverpb.TransactionLogs_DELETE,
+			Database:             "database2",
+			Kv:                   nil,
+			CreatedUnixTimestamp: 2,
+			AppliedToDb:          false,
+			Trace:                nil,
 		},
 	}
 
 	pubMessages["database3"] = []*quicksilverpb.TransactionLogs{
 		{
-			SequenceNumber:     3,
-			LastSequenceNumber: 2,
-			Action:             quicksilverpb.TransactionLogs_SET,
-			Database:           "database3",
-			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      3,
-			AppliedToDb:        false,
-			Trace:              nil,
+			LogKind:              quicksilverpb.TransactionLogs_OPERATIONAL,
+			SequenceNumber:       3,
+			LastSequenceNumber:   2,
+			Operation:            quicksilverpb.TransactionLogs_SET,
+			Database:             "database3",
+			Kv:                   nil,
+			CreatedUnixTimestamp: 3,
+			AppliedToDb:          false,
+			Trace:                nil,
 		},
 		{
-			SequenceNumber:     4,
-			LastSequenceNumber: 3,
-			Action:             quicksilverpb.TransactionLogs_DELETE,
-			Database:           "database3",
-			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      3,
-			AppliedToDb:        false,
-			Trace:              nil,
+			LogKind:              quicksilverpb.TransactionLogs_OPERATIONAL,
+			SequenceNumber:       4,
+			LastSequenceNumber:   3,
+			Operation:            quicksilverpb.TransactionLogs_DELETE,
+			Database:             "database3",
+			Kv:                   nil,
+			CreatedUnixTimestamp: 3,
+			AppliedToDb:          false,
+			Trace:                nil,
 		},
 		{
-			SequenceNumber:     5,
-			LastSequenceNumber: 4,
-			Action:             quicksilverpb.TransactionLogs_DELETE,
-			Database:           "database3",
-			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      4,
-			AppliedToDb:        true,
-			Trace:              nil,
+			LogKind:              quicksilverpb.TransactionLogs_OPERATIONAL,
+			SequenceNumber:       5,
+			LastSequenceNumber:   4,
+			Operation:            quicksilverpb.TransactionLogs_DELETE,
+			Database:             "database3",
+			Kv:                   nil,
+			CreatedUnixTimestamp: 4,
+			AppliedToDb:          true,
+			Trace:                nil,
 		},
 	}
 	pubMessages["unknown"] = []*quicksilverpb.TransactionLogs{
 		{
+			LogKind:            quicksilverpb.TransactionLogs_OPERATIONAL,
 			SequenceNumber:     0,
 			LastSequenceNumber: 0,
-			Action:             quicksilverpb.TransactionLogs_DELETE,
+			Operation:          quicksilverpb.TransactionLogs_DELETE,
 			Database:           "",
 			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      0,
 			AppliedToDb:        false,
 			Trace:              nil,
 		},
@@ -157,7 +143,7 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 		case logs := <-s:
 			for _, l := range logs {
 				// if it's an heartbeat msg
-				if l.Action == quicksilverpb.TransactionLogs_HEARTBEAT {
+				if l.LogKind == quicksilverpb.TransactionLogs_HEARTBEAT {
 					hbCounter[c]++
 					continue
 				}
@@ -215,14 +201,12 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 	pubMessages := make(map[string][]*quicksilverpb.TransactionLogs)
 	pubMessages["database1"] = []*quicksilverpb.TransactionLogs{
 		{
+			LogKind:            quicksilverpb.TransactionLogs_OPERATIONAL,
 			SequenceNumber:     1,
 			LastSequenceNumber: 0,
-			Action:             quicksilverpb.TransactionLogs_SET,
+			Operation:          quicksilverpb.TransactionLogs_SET,
 			Database:           "database1",
 			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      1,
 			AppliedToDb:        false,
 			Trace:              nil,
 		},
@@ -230,14 +214,12 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 
 	pubMessages["database2"] = []*quicksilverpb.TransactionLogs{
 		{
+			LogKind:            quicksilverpb.TransactionLogs_OPERATIONAL,
 			SequenceNumber:     2,
 			LastSequenceNumber: 1,
-			Action:             quicksilverpb.TransactionLogs_DELETE,
+			Operation:          quicksilverpb.TransactionLogs_DELETE,
 			Database:           "database2",
 			Kv:                 nil,
-			XxHash64_Checksum:  0,
-			LastId:             0,
-			UnixTimestamp:      2,
 			AppliedToDb:        false,
 			Trace:              nil,
 		},

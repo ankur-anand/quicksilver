@@ -5,52 +5,76 @@ option go_package = "github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilver
 
 // TransactionLogs is the persistent log entries in the database.
 message TransactionLogs {
+  // LogKind defines what kind of TransactionLogs this message is.
+  enum LogKind {
+    UNKNOWN = 0;
+    HEARTBEAT = 1;
+    OPERATIONAL = 2;
+  }
+
+  // Operation defines what kind of action to take for this message while creating database.
   enum Operation {
-    // Heartbeat Log Entries should not be saved.
-    HEARTBEAT = 0;
+    UNDEFINED = 0;
     SET = 1;
     DELETE = 2;
   }
 
-  // sequence_number is monotonically increasing sequence number.
+  // logKind defines what kind of TransactionLogs this message is.
+  // logKind of Unknown and Heartbeat should not be saved inside the database.
+  LogKind logKind = 1;
+  // operation defines what kind of action to take for this log message while creating database.
+  Operation operation = 2;
+
+  // created_unix_timestamp store the log creation timestamp into int64.
+  // this is useful for calculation the overall replication delay in the system in heartbeat message.
+  // note this doesn't take clock skew and clock drift into account.
+  int64 created_unix_timestamp = 3;
+  // sequence_number is not necessarily continuous monotonically increasing sequence number.
   // It is incremented for each request with SET or DEL operation.
-  uint64 sequence_number = 1;
+  // validate last_sequence_number to check for continuity of logs.
+  uint64 sequence_number = 4;
   // last_sequence_number stores the last seen sequence number in order.
-  // this helps in detecting the hole in the replicated log.
-  uint64 last_sequence_number = 2;
-  // Action to take for this log entry
-  Operation action = 3;
-  // Name of the database where this configuration Object Belongs.
+  // this helps in detecting the continuity in the replicated log.
+  uint64 last_sequence_number = 5;
+  // database is Name of the database where this configuration Object Belongs.
   // This is logical namespace for different configuration kind.
-  string database = 4;
-  // This is the config object.
-  KVObject kv = 5;
+  string database = 6;
+  // kv is the config object.
+  KVObject kv = 7;
   // CheckSum is XXHash64 from http://cyan4973.github.io/xxHash/
   // This should encode all of the information.
-  // 1. Operation
-  // 2. sequence_number
-  // 3. unix_timestamp
+  // 1. LogKind
+  // 2. Operation
+  // 3. created_unix_timestamp
+  // 4. sequence_number
+  // 5. last_sequence_number
   // 4. database name
-  // 5. KVObject
-  uint64 xxHash64_Checksum = 6;
-  // incremental_hash validates if any logs are lost or incorrectly ordered in history.
-  uint64 last_id = 7;
-  // unix_timestamp store the log first entry timestamp into int64.
-  // It's the physical time, useful for log cleanup as well.
-  // this is useful for calculation the overall replication delay in the system.
-  // note this doesn't take clock skew and clock drift into account.
-  int64 unix_timestamp = 8;
-  // applied_to_db indicates if log has been
-  bool applied_to_db = 9;
-  Trace trace = 10;
+  // 5. KVObject Hash
+  uint64 log_xxHash64_Checksum = 8;
+  // entry_unix_timestamp saves the time when this log entry was saved into the database for this instance.
+  int64 entry_unix_timestamp=9;
+  // applied_to_db indicates if log has been already applied to the database.
+  bool applied_to_db = 10;
+
+  // optional metadata for the TransactionLogs
+  map<string, string> metadata = 14;
+  // Not all the log message have the trace, but trace are send explicitly when debugging or in heartbeat message.
+  Trace trace = 15;
 }
 
+// KVObject are persistent entities in the key value database.
+// Database should save the KVObject instead of saving the client provided value directly.
 message KVObject {
-  string key = 1;
-  bytes value = 2;
-  uint64 xxHash64 = 3; // key-value level CRC
+  // encrypted signifies if the value has been encrypted.
+  // algorithm known should be used by the client.
+  bool encrypted = 1;
+  string key = 2;
+  bytes value = 3;
+  uint64 xxHash64 = 4; // key-value level CRC
   // z_compressed denotes if the value has been zst compressed
-  bool z_compressed = 4;
+  bool z_compressed = 5;
+  // optional metadata for the KVObject
+  map<string, string> metadata = 6;
 }
 
 // Trace provides additional context, to enable parent/child relationships

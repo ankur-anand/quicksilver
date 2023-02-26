@@ -41,11 +41,11 @@ func (b *BroadcastToSubscriber) Broadcast(log *quicksilverpb.TransactionLogs) {
 
 	for _, st := range b.streams {
 		// send heartbeat to all the streams.
-		if log.Action == quicksilverpb.TransactionLogs_HEARTBEAT {
+		if log.LogKind == quicksilverpb.TransactionLogs_HEARTBEAT {
 			st.rb.inBuf <- log
 			continue
 		}
-		if strings.EqualFold(st.database, log.Database) {
+		if log.LogKind == quicksilverpb.TransactionLogs_OPERATIONAL && strings.EqualFold(st.database, log.Database) {
 			st.rb.inBuf <- log
 		}
 	}
