@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package v1.quicksilver;
+option go_package = "github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilver";
+
+// TransactionLogs is the persistent log entries in the database.
+message TransactionLogs {
+  enum Operation {
+    // Heartbeat Log Entries should not be saved.
+    HEARTBEAT = 0;
+    SET = 1;
+    DELETE = 2;
+  }
+
+  // sequence_number is monotonically increasing sequence number.
+  // It is incremented for each request with SET or DEL operation.
+  uint64 sequence_number = 1;
+  // last_sequence_number stores the last seen sequence number in order.
+  // this helps in detecting the hole in the replicated log.
+  uint64 last_sequence_number = 2;
+  // Action to take for this log entry
+  Operation action = 3;
+  // Name of the database where this configuration Object Belongs.
+  // This is logical namespace for different configuration kind.
+  string database = 4;
+  // This is the config object.
+  KVObject kv = 5;
+  // CheckSum is XXHash64 from http://cyan4973.github.io/xxHash/
+  // This should encode all of the information.
+  // 1. Operation
+  // 2. sequence_number
+  // 3. unix_timestamp
+  // 4. database name
+  // 5. KVObject
+  uint64 xxHash64_Checksum = 6;
+  // incremental_hash validates if any logs are lost or incorrectly ordered in history.
+  uint64 last_id = 7;
+  // unix_timestamp store the log first entry timestamp into int64.
+  // It's the physical time, useful for log cleanup as well.
+  // this is useful for calculation the overall replication delay in the system.
+  // note this doesn't take clock skew and clock drift into account.
+  int64 unix_timestamp = 8;
+  // applied_to_db indicates if log has been
+  bool applied_to_db = 9;
+  Trace trace = 10;
+}
+
+message KVObject {
+  string key = 1;
+  bytes value = 2;
+  uint64 xxHash64 = 3; // key-value level CRC
+  // z_compressed denotes if the value has been zst compressed
+  bool z_compressed = 4;
+}
+
+// Trace provides additional context, to enable parent/child relationships
+//
+// Traces are propagated in the B3 HTTP Multiple Headers Format.
+// https://github.com/openzipkin/b3-propagation
+// B3 propagated to support non sampled debug propagation
+message Trace {
+  // x_request_id enables logging across the invoked services to be correlated.
+  string x_request_id = 1;
+  // b3 propagator.
+  // x-b3-traceid: {TraceId}
+  string x_b3_trace_id = 2;
+  // x-b3-spanid: {SpanId}
+  string x_b3_span_id = 3;
+  // x-b3-parentspanid: {ParentSpanId}
+  string x_b3_parent_span_id = 4;
+  // x-b3-sampled: {SamplingState}
+  string x_b3_sampled = 5;
+  // x-b3-flags: {DebugFlag}
+  string x_b3_flags = 6;
+}
