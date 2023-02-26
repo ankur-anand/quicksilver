@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+.coverage
 
 # Test binary, built with `go test -c`
 *.test
@@ -23,6 +24,7 @@
 .idea/**/usage.statistics.xml
 .idea/**/dictionaries
 .idea/**/shelf
+.fleet
 
 # AWS User-specific
 .idea/**/aws.xml
