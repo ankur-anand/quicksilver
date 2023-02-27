@@ -2,11 +2,12 @@ package broadcaster_test
 
 import (
 	"context"
-	"github.com/ankur-anand/quicksilver/broadcaster"
-	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ankur-anand/quicksilver/broadcaster"
+	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 )
 
 type client struct {

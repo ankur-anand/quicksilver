@@ -2,8 +2,9 @@ package broadcaster
 
 import (
 	"context"
-	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 	"time"
+
+	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 )
 
 const (

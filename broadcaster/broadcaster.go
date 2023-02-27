@@ -3,9 +3,10 @@ package broadcaster
 import (
 	"context"
 	"fmt"
-	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 	"strings"
 	"sync"
+
+	"github.com/ankur-anand/quicksilver/proto/gen/v1/quicksilverpb"
 )
 
 type receiver struct {
@@ -37,8 +38,8 @@ func NewOneToManyBroadcaster(ctx context.Context) *OneToManyBroadcaster {
 // Broadcast publishes the TransactionLogs to all the receiver currently registered.
 func (b *OneToManyBroadcaster) Broadcast(log *quicksilverpb.TransactionLogs) {
 	b.mu.RLock()
+	defer b.mu.RUnlock()
 	if len(b.streams) == 0 {
-		b.mu.RUnlock()
 		return
 	}
 
@@ -52,14 +53,13 @@ func (b *OneToManyBroadcaster) Broadcast(log *quicksilverpb.TransactionLogs) {
 			st.rb.inBuf <- log
 		}
 	}
-	b.mu.RUnlock()
 }
 
 // Close all receiver registered with the broadcaster.
 func (b *OneToManyBroadcaster) Close() {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.closed {
-		b.mu.Unlock()
 		return
 	}
 	b.closed = true
@@ -67,7 +67,6 @@ func (b *OneToManyBroadcaster) Close() {
 		delete(b.streams, client)
 		ch.cancelFunc()
 	}
-	b.mu.Unlock()
 }
 
 // EvictClient removes the specified receiver from receiving new TransactionLogs messages.
