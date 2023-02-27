@@ -17,7 +17,7 @@ type client struct {
 func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 	ctx, done := context.WithCancel(context.Background())
 	defer done()
-	bc := broadcaster.NewBroadcaster(ctx)
+	bc := broadcaster.NewOneToManyBroadcaster(ctx)
 	defer bc.Close()
 	clients := []client{
 		{
@@ -36,9 +36,9 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 
 	outStreams := make(map[string]<-chan []*quicksilverpb.TransactionLogs)
 	for _, c := range clients {
-		stream, err := bc.NewClientSubscriptionStream(c.name, c.database)
+		stream, err := bc.NewClientBroadcastReceiver(c.name, c.database)
 		if err != nil {
-			t.Errorf("error creating clientStream for cl %s", c.name)
+			t.Errorf("error creating receiver for cl %s", c.name)
 		}
 		outStreams[c.name] = stream
 	}
@@ -177,14 +177,14 @@ func TestBroadcastToSubscriber_Broadcast(t *testing.T) {
 
 	_, ok := recvMessages["unknown"]
 	if ok {
-		t.Errorf("db clientStream unsubscribed shouldn't have recieved message")
+		t.Errorf("db receiver unsubscribed shouldn't have recieved message")
 	}
 }
 
 func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 	ctx, done := context.WithCancel(context.Background())
 	defer done()
-	bc := broadcaster.NewBroadcaster(ctx)
+	bc := broadcaster.NewOneToManyBroadcaster(ctx)
 	defer bc.Close()
 	clients := []client{
 		{
@@ -227,9 +227,9 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 
 	outStreams := make(map[string]<-chan []*quicksilverpb.TransactionLogs)
 	for _, c := range clients {
-		stream, err := bc.NewClientSubscriptionStream(c.name, c.database)
+		stream, err := bc.NewClientBroadcastReceiver(c.name, c.database)
 		if err != nil {
-			t.Errorf("error creating clientStream for cl %s", c.name)
+			t.Errorf("error creating receiver for cl %s", c.name)
 		}
 		outStreams[c.name] = stream
 	}
@@ -255,7 +255,7 @@ func TestBroadcastToSubscriber_EvictClient(t *testing.T) {
 func TestBroadcastToSubscriber_Close(t *testing.T) {
 	ctx, done := context.WithCancel(context.Background())
 	defer done()
-	bc := broadcaster.NewBroadcaster(ctx)
+	bc := broadcaster.NewOneToManyBroadcaster(ctx)
 	defer bc.Close()
 	clients := []client{
 		{
@@ -269,9 +269,9 @@ func TestBroadcastToSubscriber_Close(t *testing.T) {
 	}
 	outStreams := make(map[string]<-chan []*quicksilverpb.TransactionLogs)
 	for _, c := range clients {
-		stream, err := bc.NewClientSubscriptionStream(c.name, c.database)
+		stream, err := bc.NewClientBroadcastReceiver(c.name, c.database)
 		if err != nil {
-			t.Errorf("error creating clientStream for cl %s", c.name)
+			t.Errorf("error creating receiver for cl %s", c.name)
 		}
 		outStreams[c.name] = stream
 	}
@@ -288,8 +288,8 @@ func TestBroadcastToSubscriber_Close(t *testing.T) {
 		}
 	}
 
-	// adding new clientStream should error out in closed broadcaster.
-	_, err := bc.NewClientSubscriptionStream("random", "c.database")
+	// adding new receiver should error out in closed broadcaster.
+	_, err := bc.NewClientBroadcastReceiver("random", "c.database")
 	if err == nil {
 		t.Errorf("closed broadcaster should not allow any new client addition")
 	}

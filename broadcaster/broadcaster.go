@@ -8,31 +8,34 @@ import (
 	"sync"
 )
 
-type clientStream struct {
+type receiver struct {
 	rb         *ringBuffer
 	cancelFunc context.CancelFunc
 	// ID of the database streams want to receive update from.
 	database string
 }
 
-// BroadcastToSubscriber fans out the incoming TransactionLogs to all the downstream Subscriber.
-type BroadcastToSubscriber struct {
+// OneToManyBroadcaster fans out the incoming TransactionLogs to all the downstream Subscriber.
+// It holds the TransactionLogs in memory and broadcast the TransactionLogs in batch in order it
+// is received.
+type OneToManyBroadcaster struct {
 	ctx     context.Context
 	mu      sync.RWMutex
 	closed  bool
-	streams map[string]*clientStream
+	streams map[string]*receiver
 }
 
-func NewBroadcaster(ctx context.Context) *BroadcastToSubscriber {
-	return &BroadcastToSubscriber{
+// NewOneToManyBroadcaster returns an initialized OneToManyBroadcaster
+func NewOneToManyBroadcaster(ctx context.Context) *OneToManyBroadcaster {
+	return &OneToManyBroadcaster{
 		ctx:     ctx,
 		mu:      sync.RWMutex{},
-		streams: make(map[string]*clientStream),
+		streams: make(map[string]*receiver),
 	}
 }
 
-// Broadcast publishes the log to all the streams currently registered for the database log.
-func (b *BroadcastToSubscriber) Broadcast(log *quicksilverpb.TransactionLogs) {
+// Broadcast publishes the TransactionLogs to all the receiver currently registered.
+func (b *OneToManyBroadcaster) Broadcast(log *quicksilverpb.TransactionLogs) {
 	b.mu.RLock()
 	if len(b.streams) == 0 {
 		b.mu.RUnlock()
@@ -52,8 +55,8 @@ func (b *BroadcastToSubscriber) Broadcast(log *quicksilverpb.TransactionLogs) {
 	b.mu.RUnlock()
 }
 
-// Close closes the channels to all subscribers registered with the publisher.
-func (b *BroadcastToSubscriber) Close() {
+// Close all receiver registered with the broadcaster.
+func (b *OneToManyBroadcaster) Close() {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
@@ -67,8 +70,8 @@ func (b *BroadcastToSubscriber) Close() {
 	b.mu.Unlock()
 }
 
-// EvictClient removes the specified client from receiving any more clientStream log messages.
-func (b *BroadcastToSubscriber) EvictClient(client string) {
+// EvictClient removes the specified receiver from receiving new TransactionLogs messages.
+func (b *OneToManyBroadcaster) EvictClient(client string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	ch, ok := b.streams[client]
@@ -78,8 +81,8 @@ func (b *BroadcastToSubscriber) EvictClient(client string) {
 	}
 }
 
-// NewClientSubscriptionStream returns a new initialized clientStream for the client, where TransactionLogs will be sent.
-func (b *BroadcastToSubscriber) NewClientSubscriptionStream(client string, db string) (<-chan []*quicksilverpb.TransactionLogs, error) {
+// NewClientBroadcastReceiver returns a new initialized receiver go channel for the client, where TransactionLogs will be sent.
+func (b *OneToManyBroadcaster) NewClientBroadcastReceiver(client string, db string) (<-chan []*quicksilverpb.TransactionLogs, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -93,7 +96,7 @@ func (b *BroadcastToSubscriber) NewClientSubscriptionStream(client string, db st
 	ctx, done := context.WithCancel(b.ctx)
 	go rb.observeStream(ctx)
 	// we create buffered channel
-	b.streams[client] = &clientStream{
+	b.streams[client] = &receiver{
 		cancelFunc: done,
 		rb:         rb,
 		database:   db,
